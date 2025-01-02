@@ -1,0 +1,751 @@
+---
+title: "Analiza skuteczności w piłce nożnej"
+author: "Jan Walkiewicz"
+format: 
+  html: 
+    toc: true 
+    toc-title: "Spis treści"
+    toc-location: right
+    number-sections: false
+title-block-banner: true
+editor: visual
+code-fold: true
+execute:
+  echo: true
+---
+
+## Wstęp
+
+Piłka nożna jest jedną z najpopularniejszych i najbardziej emocjonujących dyscyplin sportowych na świecie. W ostatnich latach analiza danych stała się kluczowym narzędziem w zrozumieniu mechanizmów gry oraz poprawie wyników drużyn. Wraz z rozwojem technologii i dostępności danych statystycznych, pojawiła się możliwość głębszej analizy indywidualnych umiejętności zawodników oraz ich wkładu w sukces drużyny.
+
+**Celem** niniejszego projektu jest analiza różnic w skuteczności strzałów między zawodnikami w 5 najlepszych ligach świata w sezonach 2017/18 - 2024/25. **Skuteczność** zdefiniowano jako różnicę między liczbą zdobytych goli przez danego zawodnika a jego statystyką oczekiwane gole (expected goals). Statystyka expected goals, znana jako metryka skuteczności strzeleckiej, gdyż pozwala na ocenę, jak wiele bramek zawodnik powinien zdobyć. Szczegółowe wyjaśnienie tej metryki znajduje się w części zatytułowanej "Expected Goals – metryka skuteczności strzeleckiej".
+
+W projekcie badane będą między innymi różnice w skuteczności strzałów w zależności od pozycji na boisku, ligi, kraju oraz wieku zawodników. W szczególności, projekt porusza pytania takie jak:
+
+Czy skuteczność zawodników jest kluczowa w osiąganiu wyników drużyny?
+
+Jakie różnice występują między pozycjami na boisku w kontekście skuteczności strzałów?
+
+Czy istnieje wiekowy "prime" w skuteczności strzeleckiej?
+
+Dzięki temu praca dostarczy nowych wniosków, które mogą być wykorzystane przez analityków sportowych, trenerów oraz fanów piłki nożnej. Na podstawie mojej dotychczasowej wiedzy o piłce nożnej przyjęto tezę, że najbardziej skuteczni są doświadczeni piłkarze grający na pozycji napastnika, pochodzy z krajów eurpoejskich i grający w lidze angielskiej (Premier League). Motywacją do podjęcia powyższej tematyki jest, obok moich zainteresowań, luka na rynku w tym zakresie.
+
+```{r, include=FALSE}
+#Bibliotek
+library(rio)
+library(tidyverse)
+library(ggsoccer)
+library(sf)
+library(leaflet)
+library(RColorBrewer)
+library(htmlwidgets)
+library(data.table)
+library(knitr)
+library(ggtext)
+library(scales)
+library(worldfootballR)
+library(hrbrthemes)
+library(gridExtra)
+library(plotly)
+library(factoextra)
+library(DT)
+```
+
+## Przedstawienie danych
+
+Projekt obejmuje analizę danych statystycznych dotyczących piłkarzy występujących w 5 najlepszych ligach świata (Bundesliga, Premier League, La liga, Seria A, Ligue 1) na przełomie sezonów 2017/18 - 2024/25. Użyte w projekcie określenie "obserwacje" dotyczy konkretnych zawodników z podziałem na sezony.
+
+Zbiór danych do analizy pochodzi ze strony [Fbref](https://fbref.com/en/comps/Big5/shooting/players/Big-5-European-Leagues-Stats)
+
+Do scrappingu danych użyto biblioteki [worldfootballR](https://jaseziv.github.io/worldfootballR/articles/extract-fbref-data.html#the-big-5-euro-league-players)
+
+Proces scrappingu został opisany w pliku "Przygotowanie danych"
+
+```{r}
+#Importowanie danych
+data <- import("football_data.csv")
+```
+
+**Dane zawierają następujące kolumny dotyczące danego piłkarza w danym sezonie:**
+
+1\) Season_End_Year - rok zakończenia sezonu, z którego jest obserwacja
+
+2\) Squad - klub w jakim występował/występuje
+
+3\) Comp - liga w jakiej występuje/występował
+
+4\) Player - imię i nazwisko /pseudonim
+
+5\) Nation - kod kraju według FIFA
+
+6\) Pos - Pozycja ("DF" - obrońca, "MF" - pomocnik, "FW" - napastnik)
+
+7\) Age - wiek
+
+8\) Gls_Standard - ilość goli (G)
+
+9\) Sh_Standard - ilośc strzałów
+
+10\) Dist_Standard - średni dystans oddanych strzałów
+
+11\) xG_Expected - expected goals = oczekiwane gole (xG)
+
+12\) G_minus_xG_Expected - skuteczność (G - xG)
+
+## Expected goals - metryka skuteczności strzeleckiej
+
+Dużą część analiz oparto na statystyce "**expected goals**" (**oczekiwane gole**), która oznacza prawdopodobeństwo, że strzał zakończy się bramką. Wielkość ta przyjmuje wartości od 0 do 1 - im większa wartość, tym większa szansa na zdobycie bramki. Wartość 1 oznacza 100% szansy na zdobycie gola po danym strzale, a np. 0,15 oznacza 15% szansy. Wartość ta jest szacowana przez dedykowane algorytmy, biorące pod uwagę takie parametry jak:
+
+1\) odległość od bramki
+
+2\) część ciała jaką oddawany jest strzał
+
+3\) rodzaj asysty
+
+4\) kąt do bramki
+
+5\) ustawienie przeciwników
+
+```{r}
+#Ramka pomocnicza
+data_shots <- data.frame(
+  rodzaje = c("Gole", "Oczekiwane gole"),
+  wartosci = c(sum(data$Gls_Standard, na.rm = TRUE), sum(data$xG, na.rm = TRUE)))
+#Tworzenie wykresu
+ggplot(data_shots, aes(x = rodzaje, y = wartosci)) +
+  geom_bar(stat = "identity", width = 0.5, color = "dimgray", fill = "#404080") +
+  geom_text(aes(label = wartosci), vjust = -0.5, color = "black", size = 5) +
+  labs(
+    title = "Porównanie łącznej liczby goli i oczekiwanych goli") +
+  scale_y_continuous(limits = c(0, 50000)) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 16, color = "black"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 14, colour = "black"))
+```
+
+Na powyższym wykresie łączna liczba goli i oczekiwanych goli nieznacznie się różni, co dowodzi skuteczności tej statystyki.
+
+Do udowodnienia skuteczności możemy wykorzystać również kolumnę "G_minus_xG_Expected".
+
+Średnia wartość w tej kolumnie wynosi:
+
+```{r}
+#Obliczanie średniej
+mean(data$G_minus_xG_Expected, na.rm = TRUE)
+```
+
+Jest to wartość stosunkowo bliska zeru, co potwierdza tezę mówiącą o tym, że statystyka expected goals jest skuteczną miarą przewidywania liczby goli.
+
+## Czy skuteczność zawodników jest kluczowa w osiąganiu wyników?
+
+```{r}
+#Importowanie danych
+data_winners <- import("football_data_winners.csv")
+```
+
+```{r, warning=FALSE }
+#Tworzenie wykresu
+ggplot(data=data_winners, aes(x=G_minus_xG_Expected, group=win, fill=as.factor(win))) +
+  geom_density(adjust=1.5, position="fill") +
+  scale_fill_manual(values=c("lightgrey", "#404080"), 
+                    labels=c("Miejsca poniżej 5", "Miejsca powyżej lub równe 5")) +
+  theme_ipsum() +
+  labs(fill="Win Status", x="Skuteczność", y="Gęstość", 
+       title="Rozkład dodatniej skuteczności z podziałem na zajętą pozycje w lidze") +
+  theme(legend.title = element_blank(), 
+        legend.text = element_text(size = 8, color = "black"),
+        plot.title = element_text(size = 10, hjust = 0.25),
+        panel.grid = element_blank(),
+        legend.position = "right") +
+  xlim(0, 10)
+```
+
+Na powyższym wykresie wyraźnie widać, że zawodnicy charakteryzujący się **dodatnią skutecznością** (czyli tacy, którzy zdobyli więcej bramek, niż przewidywał algorytm), **w większości grali w drużynach, które kończyły sezon w pierwszej piątce tabeli**. Jest to doskonale widoczne w porównaniu do zawodników z drużyn zajmujących miejsca poniżej piątego, w których przypadki dodatniej skuteczności były zdecydowanie rzadsze. Taka wizualizacja sugeruje silną korelacje między indywidualną skutecznością strzelecką zawodników a sukcesem zespołu w całym sezonie. Wysoka skuteczność zawodników może być kluczowym czynnikiem przyczyniającym się do osiągania wysokich miejsc w tabeli, czyli końcowego sukcesu!
+
+## Różnice w Expected goals między zawodnikami
+
+### Różnice między pozycjami
+
+```{r, warning=FALSE}
+#Ramka pomocnicza
+data_pitch <- data %>%
+  group_by(Pos) %>%
+  summarise(
+    mean_position = mean(G_minus_xG_Expected, na.rm = TRUE)) %>%
+  mutate(
+    x = case_when(
+      Pos == "FW" ~ 85,
+      Pos == "MF" ~ 57,
+      Pos == "DF" ~ 25),
+    y = 40,
+    label = case_when(
+      Pos == "FW" ~ "Napastnicy",
+      Pos == "MF" ~ "Pomocnicy",
+      Pos == "DF" ~ "Obrońcy",
+      Pos == "GK" ~ "Bramkarze"))
+#Tworzenie wykresu
+ggplot() +
+  annotate_pitch(colour = "grey80", dimensions = pitch_statsbomb) +
+  theme_pitch() +
+  coord_flip(xlim = c(0, 100), ylim = c(0, 100)) +
+  geom_point(data = data_pitch, aes(x = x, y = y, color = mean_position), size = 24) +
+  geom_text(data = data_pitch, aes(x = x, y = y, label = round(mean_position, 2)), 
+            color = "black", size = 5, vjust = 0.2, inherit.aes = FALSE) +
+  geom_text(data = data_pitch, aes(x = x, y = y - 17, label = label),
+            color = "dimgray", size = 5, inherit.aes = FALSE) +
+  scale_color_gradient2(low = "red", high = "green", midpoint = 0) +
+  labs(
+    title = "Skuteczność względem pozycji na boisku",
+    color = "Skuteczność") +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    legend.position = c(0.9, 0.6),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 14),
+    plot.title = element_text(size = 14, color = "black"))
+```
+
+Na powyższym wykresie skuteczność piłkarzy różni się w zależności od tego na jakiej pozycji występują. Mimo, że między obrońcami a pomocnikami występuje minimalna różnica (wynosi ona zaledwie 0,01), jednak po ich porównaniu do napastników - różnica staje się znacząca. Według algorytmu zawodnicy grający na pozycji napastnika spisują się minimalnie ponad oczekiwania, podczas gdy obrońcy i pomocnicy nieco poniżej przewidywań. Napastnicy, jako gracze odpowiedzialni za zdobywanie bramek, są bardziej skuteczni w spełnianiu oczekiwań, co może wynikać z ich specjalistycznego treningu lub większej koncentracji na ofensywnych zadaniach. Z kolei obrońcy i pomocnicy, mający bardziej zróżnicowane role, mogą mieć trudniej w osiąganiu wyników zgodnych z algorytmicznymi przewidywaniami, jeśli chodzi o skutecznośc ich strzałów na bramke.
+
+Poniżej przedstawiono stosunek liczby strzałów jakie oddają zawodnicy na poszczególnych pozycjach.
+
+```{r}
+#Ramka pomocnicza
+data_sho_pos <- data %>%
+  group_by(Pos) %>%
+  summarise(
+    total_shots = sum(Sh_Standard, na.rm = TRUE)) %>%
+  mutate(
+    Pos = case_when(
+      Pos == "DF" ~ "Obrońcy",
+      Pos == "MF" ~ "Pomocnicy",
+      Pos == "FW" ~ "Napastnicy"))
+
+
+#Tworzenie wykresu
+p1 <- ggplot(data_sho_pos, aes(x = reorder(Pos, total_shots), y = total_shots)) +
+  geom_bar(stat = "identity", width = 0.5, color = "dimgray", fill = "dimgray") +
+  geom_text(aes(label = total_shots), vjust = -0.5, color = "black", size = 5) +
+  labs(
+    title = "Liczba strzałów oddanych przez zawodników na poszczególnych pozycjach") +
+  scale_y_continuous(limits = c(0, max(data_sho_pos$total_shots) * 1.1)) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(size = 12, color = "black"),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title.y = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 10, colour = "black"))
+```
+
+```{r, warning=FALSE}
+#Tworzenie ramki pomocniczej
+shots_by_pos <- data %>%
+  group_by(Pos) %>%
+  summarise(
+    total_shots = sum(Sh_Standard, na.rm = TRUE))
+
+#Obliczenie całkowitej liczby strzałów
+total_shots_sum <- sum(shots_by_pos$total_shots, na.rm = TRUE)
+
+#Obliczenie procentowego udziału w strzałach
+shots_by_category <- shots_by_pos %>%
+  mutate(
+    percentage = (total_shots / total_shots_sum) * 100,
+    Pos = factor(Pos, levels = c("FW", "MF", "DF"))
+    
+  )
+
+#Tworzenie wykresu procentowego
+p2 <- ggplot(shots_by_category, aes(x = "", y = percentage, fill = Pos)) +
+  geom_bar(stat = "identity", width = 0.3) +
+  coord_flip() +
+  labs(
+    title = "Procentowy udział strzałów w zależności od pozycji",
+    subtitle = "<span style='color:dimgray;'>Obrońcy</span> |
+    <span style='color:lightgray;'>Pomocnicy</span> |
+    <span style='color:navy;'>Napastnicy</span>",
+    x = "",
+    y = "Procentowy udział strzałów"
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 100, by = 10),
+    labels = function(x) paste0(x, "%")) +
+  scale_fill_manual(
+    values = c("DF" = "dimgray", "MD" = "lightgray", "FW" = "#404080")) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 8,margin = margin(r = -20)),
+    axis.ticks.x = element_line(color = "gray", size = 0.5),
+    axis.line.x = element_line(color = "gray", size = 0.5),
+    plot.title.position = "plot",
+    plot.subtitle = element_markdown(),
+    plot.margin = margin(t = 220, b = 10, l = 20, r = 20),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.y = element_text(size = 10, color = "gray", margin = margin(t = -300)),
+    legend.position = "none",
+    plot.title = element_text(size = 10, colour = "black"))
+#Wyświetlanie 2 wykresów
+grid.arrange(p1, p2, ncol = 2)
+```
+
+Na powyższym diagramie napastnicy oddają około 45% wszystkich strzałów. Jest to mocno zaskakująca obserwacja biorąc pod uwagę fakt, że to piłkarze grający na tej pozycji kojarzeni są z oddawaniem zdecydowanej większości strzałów na bramke przeciwnika. **Ponad połowa strzałów oddawana jest przez zawodników grających na innych pozycjach!** Taka obserwacja podkreśla znaczenie skuteczności strzałów, niezależnie od pozycji na boisku. W związku z tym, w analizie uwzględniono wszystkie wymienione pozycje, gdyż nawet obrońcy (którzy jak mogłoby się wydawać niezwykle rzadko uderzają na bramke przeciwnika) oddają w meczu średnio co około piąty strzał, co za tym idzie ich skuteczność również ma nie małe znaczenie.
+
+```{r, warning=FALSE}
+#Tworzenie pomocniczej ramki
+data_pos_dist <- data %>%
+  filter(Pos == c("DF", "FW"))
+#Wyliczanie wartosci   
+data_pos_dist %>%
+  group_by(Pos) %>%
+  summarise(
+    "mean_dist (yards)" = mean(Dist_Standard, na.rm = TRUE))%>%
+  as.data.frame()
+```
+
+Istotne znaczenie skuteczności strzałów obrońców wynika również z faktu, że różnica średniej odległości oddawanych strzałów między napastnikami a obrońcami wynosi zaledwie 0,38518 jarda, czyli około 35 centymetrów. Co biorąc pod uwagę długość boiska wynoszącą w przybliżeniu 115 jardów (10 500 cm), jest różnicą wręcz minimalną. Ilość strzałów obrońców nie wynika więc z dużej ilości strzałów oddawanych z dystansu, które miałyby małą szanse na sukces w postaci bramki.
+
+### Różnice w poszczególnych krajach
+
+**Kraje z najmniejszą średnią skutecznością:**
+
+```{r}
+#Tworzenie ramki pomocniczej
+data_pom <- data %>%
+  group_by(Nation) %>%
+  summarise(
+    effectiveness = mean(G_minus_xG_Expected, na.rm = TRUE),
+    count_players = n()) %>%
+  arrange(effectiveness)%>%
+  as.data.frame()
+#Wyświetlanie
+head(data_pom)
+```
+
+Jak widać skrajnie niskie wartości skuteczności, w momencie gdy podzielimy zawodników na ich narodowości, występują w krajach gdzie liczba piłkarzy jest stosunkowo mała. Ciężko wyciągać wnioski o piłkarzach z Tanzanii (TAN) w momencie gdy w obserwacjach istnieje jeden taki piłkarz. Warto zwrócić uwagę na analizę zwodników z **Beninu (BEN)**, czyli z kraju położonego w zachodniej części Afryki z którego występują 22 obserwacje. Średnio cechowały się one niską skutecznością, stąd możemy domniemywać, że potencjalnie szkółki z tego kraju mogą słabo szkolić piłkarzy pod względem skuteczności, co może sugerować opcję poszukiwań skutecznych piłkarzy w innych krajach. Skuteczność poszczególnych piłkarzy z Beniunu wygląda następująco:
+
+```{r}
+#Tworzenie ramki pomocniczej
+data_BEN <- data %>%
+  filter(Nation == "BEN") %>%
+  mutate(effectiveness = G_minus_xG_Expected) %>%
+  arrange(effectiveness) %>%
+  as.data.frame()
+#Wyświetlanie
+data_BEN$effectiveness
+```
+
+Jak możemy zauważyć średnia niska skuteczność nie jest spowodowana jedną czy dwoma skrajnymi obserwacjami.
+
+Poniżej przedstawiono ramkę danych krajów z najmniejszą średnią skutecznością, gdzie liczba piłkarzy przekracza 15 aby pokazać kolejne kraje, w których potencjalnie nie warto szukać skutecznych piłkarzy.
+
+```{r}
+#Tworzenie ramki pomocniczej
+data_pom5 <- data %>%
+  group_by(Nation) %>%
+  summarise(
+    effectiveness = mean(G_minus_xG_Expected, na.rm = TRUE),
+    count_players = n()) %>%
+  filter(count_players > 15) %>%
+  arrange(effectiveness)%>%
+  as.data.frame()
+#Wyświetlanie
+head(data_pom5)
+```
+
+**Kraje z największą średnią skutecznością, gdzie liczba piłkarzy przekracza 15:**
+
+```{r}
+#Tworzenie ramki pomocniczej
+data_mean_max <- data %>%
+  group_by(Nation) %>%
+  summarise(
+    effectiveness = mean(G_minus_xG_Expected, na.rm = TRUE),
+    count_players = n()) %>%
+  arrange(desc(effectiveness))%>%
+  filter(count_players > 15) %>%
+  as.data.frame()
+#Wyświetlanie
+head(data_mean_max)
+```
+
+Jeśli chodzi o kraje z największą średnią skutecznością odrzucono kraje posiadające mniej niż 15 obserwacji. Jak możemy zauważyć największą skutecznością cechują się piłkarze z Korei Południowej (KOR), którzy mocno wyróżniają się na tle innych. Wyraźnie wyróżniają się także zawodnicy z Gruzji (GEO) i to potencjalnie w tych krajach warto szukać skutecznych piłkarzy. Wyróżnione krają mogą być potencjalnie dobrym kierunkiem w poszukiwaniu przyszłych talentów, gdyż piłkarze tych właśnie narodowości w przyszłości cechują się wysoką skutecznością.
+
+Poniżej przedstawiono interaktywną mapę, która umożliwia sprawdzenie skuteczności piłkarzy w podziale na wszystkie kraje świata. Intensywność koloru wskazuje poziom średniej skuteczności – im ciemniejszy kolor, tym wyższa średnia skuteczność zawodników z danego kraju. (Po najechaniu kursorem na wybrane państwo można zobaczyć szczegółowe informacje, takie jak średnia skuteczność, liczba piłkarzy oraz nazwa kraju).
+
+```{r}
+#Tworzenie ramki na podstawie której będzie stworzona interaktywna mapa
+world_sf <- read_sf(paste0(
+  getwd(), "/DATA/",
+  "TM_WORLD_BORDERS_SIMPL-0.3.shp"))
+#Tworzenie ramki pomocniczej
+data_map <- copy(data)
+#Sprawdzamy które kraje nie pasują do kodowania ISO3
+#setdiff(data_map$Nation, world_sf$ISO3)
+```
+
+```{r}
+#Zmiana kodów niektórych krajów aby były one zgodne z kodowaniem ISO 3
+data_map$Nation[data_map$Nation == "ALG"] <- "DZA"
+data_map$Nation[data_map$Nation == "ANG"] <- "AGO"
+data_map$Nation[data_map$Nation == "BER"] <- "BMU"
+data_map$Nation[data_map$Nation == "BUL"] <- "BGR"
+data_map$Nation[data_map$Nation == "CGO"] <- "COG"
+data_map$Nation[data_map$Nation == "CHA"] <- "TCD"
+data_map$Nation[data_map$Nation == "CHI"] <- "CHL"
+data_map$Nation[data_map$Nation == "CRC"] <- "CRI"
+data_map$Nation[data_map$Nation == "CRO"] <- "HRV"
+data_map$Nation[data_map$Nation == "CTA"] <- "CIV"
+data_map$Nation[data_map$Nation == "GER"] <- "DEU"
+data_map$Nation[data_map$Nation == "DEN"] <- "DNK"
+data_map$Nation[data_map$Nation == "ENG"] <- "GBR"
+data_map$Nation[data_map$Nation == "EQG"] <- "GNQ"
+data_map$Nation[data_map$Nation == "GAM"] <- "GMB"
+data_map$Nation[data_map$Nation == "GRE"] <- "GRC"
+data_map$Nation[data_map$Nation == "GRN"] <- "GRD"
+data_map$Nation[data_map$Nation == "GUA"] <- "GTM"
+data_map$Nation[data_map$Nation == "GUI"] <- "GIN"
+data_map$Nation[data_map$Nation == "HAI"] <- "HTI"
+data_map$Nation[data_map$Nation == "HON"] <- "HND"
+data_map$Nation[data_map$Nation == "KSA"] <- "SAU"
+data_map$Nation[data_map$Nation == "KOS"] <- "XKX"
+data_map$Nation[data_map$Nation == "KVX"] <- "KOS"
+data_map$Nation[data_map$Nation == "MAD"] <- "MAR"
+data_map$Nation[data_map$Nation == "MTN"] <- "MNE"
+data_map$Nation[data_map$Nation == "NED"] <- "NLD"
+data_map$Nation[data_map$Nation == "NIG"] <- "NER"
+data_map$Nation[data_map$Nation == "PAR"] <- "PRY"
+data_map$Nation[data_map$Nation == "PHI"] <- "PHL"
+data_map$Nation[data_map$Nation == "PLE"] <- "PSE"
+data_map$Nation[data_map$Nation == "POR"] <- "PRT"
+data_map$Nation[data_map$Nation == "RSA"] <- "ZAF"
+data_map$Nation[data_map$Nation == "SCO"] <- "GBR"
+data_map$Nation[data_map$Nation == "SKN"] <- "KNA"
+data_map$Nation[data_map$Nation == "SMN"] <- "SMR"
+data_map$Nation[data_map$Nation == "SUI"] <- "CHE"
+data_map$Nation[data_map$Nation == "TAN"] <- "TZA"
+data_map$Nation[data_map$Nation == "TOG"] <- "TGO"
+data_map$Nation[data_map$Nation == "TRI"] <- "TTO"
+data_map$Nation[data_map$Nation == "URU"] <- "URY"
+data_map$Nation[data_map$Nation == "WAL"] <- "GBR"
+data_map$Nation[data_map$Nation == "ZAM"] <- "ZMB"
+data_map$Nation[data_map$Nation == "ZIM"] <- "ZWE"
+```
+
+```{r}
+#Grupowanie i obliczanie średniej skuteczności dla każdego kraju
+data_map <- data_map %>%
+  group_by(Nation) %>%
+  summarise(
+    mean_G_minus_xG = mean(G_minus_xG_Expected, na.rm = TRUE),
+    count_observations = n())
+```
+
+```{r}
+#Tworzenie odpowiedniej ramki do stworzenia mapy
+world_sf <- world_sf %>%
+  left_join(data_map, by = c("ISO3" = "Nation"))
+```
+
+```{r, warning=FALSE}
+#Kolory na mapie
+mybins <- seq(-1.8, 1.7, by = 0.01)
+mypalette <- colorBin(
+  palette = "YlOrBr", domain = world_sf$mean_G_minus_xG,
+  na.color = "transparent", bins = mybins)
+
+#Przygotowanie tekstu do wyświetlania
+mytext <- paste(
+  "Kraj: ", world_sf$NAME, "<br/>",
+  "Skuteczność: ", round(world_sf$mean_G_minus_xG, 2), "<br/>",
+  "Liczba piłkarzy: ", world_sf$count_observations,
+  sep = "") %>%
+  lapply(htmltools::HTML)
+
+#Tworzenie mapy
+map <- leaflet(world_sf) %>%
+  addTiles() %>%
+  setView(lat = 10, lng = 0, zoom = 2) %>%
+  addPolygons(
+    fillColor = ~mypalette(mean_G_minus_xG),
+    stroke = TRUE,
+    fillOpacity = 0.9,
+    color = "white",
+    weight = 0.3,
+    label = mytext,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "13px",
+      direction = "auto"))
+#Zapis mapy
+saveWidget(map, file=paste0( getwd(), "/HtmlWidget/choroplethLeaflet1.html"))
+#Wyświetlenie
+map
+```
+
+### Różnice między ligami
+
+```{r, warning=FALSE}
+#Tworzenie wykresu
+ggplot(data, aes(x = Comp, y = G_minus_xG_Expected, fill = Comp)) +
+  geom_violin(trim = FALSE, alpha = 0.7) +
+  geom_boxplot(width = 0.4, outlier.shape = NA) +
+  xlab(NULL) +
+  ylab("Skuteczność") +
+  ggtitle("Skuteczność piłkarzy ze względu na ligi") +
+  theme(
+    plot.title = element_text(size = 16, color = "black", hjust = -0.1),
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black"),
+    axis.text.y = element_text(size = 6)) +
+  scale_y_continuous(breaks = seq(-10, 13, by = 1))+
+  geom_hline(yintercept = -0.1, linetype = "dashed", color = "navy")
+```
+
+Na powyższym wykresie nie istnieją wyraźnie różnice w skuteczności piłkarzy grających w różnych ligach. W każdej lidze najwięcej piłkarzy oscyluje w skuteczności około 0 (co potwierdza skuteczność statystyki Expected goals), mediana w każdej lidze również jest taka sama i wynosi -0,1 (wartość ta została zaznaczona przerywaną linią). Różnice możemy zobaczyć jedynie w liczbę piłkarzy - w "Premier League" (liga angielska) oraz w "Bundeslidze" (liga niemiecka), gdyż jest ich mniej niż w pozostałych ligach. Mimo to w Bundeslidze znajdują się obserwacje z najgorszą skutecznością. Najbardziej skuteczni zawodnicy znajdują się w "La Lidze"(liga hiszpańska).
+
+### Różnice ze względu na wiek - Czy istnieje wiekowy "prime"?
+
+```{r}
+#Ustalenie poziomów grup wiekowych 
+data$Age_Group <- factor(
+  data$Age_Group,
+  levels = c(
+    "Junior (18 i poniżej)",
+    "Bardzo młody (21 i poniżej)",
+    "Młody (26 i poniżej)",
+    "Średni (30 i poniżej)",
+    "Starszy (powyżej 30)"))
+#Tworzenie ramki pomocniczej
+data_age <- data %>%
+  group_by(Age_Group) %>%
+  summarise(Avg_G_minus_xG = mean(G_minus_xG_Expected, na.rm = TRUE),
+            Count = n())
+#Tworzenie pierwszego wykresu
+p3 <- ggplot(data_age, aes(x = Avg_G_minus_xG, y = Age_Group)) +
+  geom_bar(stat = "identity", fill = "mediumseagreen") +
+  theme_minimal() +
+  labs(
+    title = "Skuteczność według grup wiekowych",
+    x = "Skuteczność") +
+  theme(
+    axis.title.x = element_text(size = 12),
+    axis.text.x = element_text(size = 8),
+    axis.text.y = element_text(size = 10, face = "bold", color = "black"),
+    axis.title.y = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 6.5, color = "black"),
+    axis.ticks.x = element_line(color = "grey"),
+    axis.line.x = element_line(color = "grey"),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank()) +
+  coord_cartesian(xlim = c(-0.075, 0.025))
+#Tworzenie drugiego wykresu
+p4 <- ggplot(data_age, aes(x = Count, y = Age_Group)) +
+  geom_bar(stat = "identity", fill = "#404080") +
+  theme_minimal() +
+  labs(
+    title = "Liczebność grup wiekowych",
+    x = "Liczebność") +
+  theme(
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 8),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 6.5, color = "black"),
+    axis.ticks.x = element_line(color = "grey"),
+    axis.line.x = element_line(color = "grey"),
+    axis.ticks.y = element_blank(),
+    axis.line.y = element_blank())
+#Wyświetlanie
+grid.arrange(p3, p4, ncol = 2)
+```
+
+Na przedstawionym po lewej stronie wykresie widać nieduże różnice między wartościami (różnica między największa a najmniejszą wartością wynosi zaledwie ≈ 0.057). Jednak mimo to możemy zauważyć, że **najwyższą średnią skutecznością** charakteryzują się zawodnicy w grupie wiekowej "**Junior**", która jest zarazem grupą najmniej liczną. Może to wynikać z faktu, że młodsi piłkarze, którzy w tym wieku grają w drużynach seniorskich, często wyróżniają się wyjątkowym talentem. Tacy zawodnicy, otrzymując szansę w drużynie seniorskiej, mają tendencję do wykazywania wysokiej skuteczności, ponieważ ich umiejętności są na tyle imponujące, że pozwalają im konkurować z bardziej doświadczonymi zawodnikami. Warto jednak zauważyć, że zdecydowana większość zawodników w tej grupie wiekowej nadal gra w drużynach juniorskich. Jak wcześniej wspomniano, muszą oni przejawiać ogromny talent, by dostać szansę w drużynie seniorskiej, stąd też może wynikać ich wysoka względem innych grup wiekowych skuteczność.
+
+Biorąc jednak pod uwagę wielkość grupy Juniorów, oraz przedstawione powyżej fakty, jako wiekowy "**prime**" można określić najbardziej liczną grupę zawodników, czyli tych pomiędzy **21 a 26 rokiem życia**. I to zawodników w takim wieku potenjcalnie najlepiej szukać w momencie gdy skuteczność jest priorytetem.
+
+Grupą cechującą się **najgorszą skutecznością** są zawodnicy w wieku między **18 a 21 lat**. Każda z drużyn w analizowanej bazie posiada drużynę młodzieżową do 21 lat. Zgodnie z diagramem wprowadzeni wcześniej do drużyny seniorskiej zawodnicy (między 18 a 21 rokiem życia) nie cieszą się odrazu skutecznością na poziomie starszych zawodników, ale czy wprowadzeni wcześniej zawodnicy w przyszłości cechują się lepszą skutecznością dzięki zdobytemu doświadczeniu?
+
+```{r}
+#Tworzenie pomocniczej ramki danych
+data_pom6 <- data %>%
+  filter(Age > 18 & Age <= 21)
+#Flitrowanie piłkarzyna po kolumnie "Player" którzy zostali wprowadzeni między 18 a 21 rokiem życia
+data_pom6 <- data %>%
+  filter(Player %in% data_pom6$Player)
+#Odrzucanie obserwacji miedzy 18, a 21 rokiem życia, aby zobaczyc czy po tym okresie zaczeli cechować się wyższą skutecznością
+data_pom6 <- data_pom6 %>%
+  filter(Age > 21)
+#Tworzenie ramki z piłkarzami powyżej 21 roku życia którzy, zadebiutowali po tym wieku
+data_pom7 <- data %>%
+  filter(Age > 21 & !(Player %in% data_pom6$Player))
+#Łączenie obserwacji ze stworzeniem dodatkowej kolumny
+data_early_start <- bind_rows(
+  data_pom6 %>% mutate(early_start = TRUE),
+  data_pom7 %>% mutate(early_start = FALSE))
+```
+
+```{r}
+#Tworzenie wykresu
+ggplot(data_early_start, aes(x = G_minus_xG_Expected, fill = as.factor(early_start))) +
+  geom_density(alpha = 0.6) +
+  labs(
+    title = "Rozkład skuteczności zawodników powyżej 21 roku życia",
+    x = "Skuteczność",
+    y = "Gęstość",
+    fill = ""
+  ) +
+  scale_fill_manual(values = c("TRUE" = "#404080", "FALSE" = "mediumseagreen"),
+                    labels = c("TRUE" = "Debiut przed 21 rokiem życia", "FALSE" = "Debiut po 21 roku życia")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.title.y = element_text(size = 12),
+    plot.title = element_text(size = 16, hjust = 0, color = "black"),
+    panel.grid = element_blank())
+```
+
+Na wykresie powyżej funkcje gęstości prawie się pokryły. **U zawodników debiutujących poniżej 21 roku życia nie widać wielkich różnic w skuteczności!** Więc być może kluby (z analizowanych 5 najlepszych lig) powinny bardziej skupić się na innych czynnikach niż wiek debiutu przy wyborze nowych nabytków (jeśli są to nabytki z analizowanych lig), oraz podejmować dezycje o promowaniu młodych zawodników w opraciu o bardziej kompleksowe analizy. Widać także, że ilość bramek zawodników debiutujących w wieku powyżej 21 lat była minimalnie lepiej przewidywana przez algorytm Expected goals.
+
+## Ogólne spojrzenie na skuteczność oraz liczbę strzałów i średnią odległość od bramki przeciwnika
+
+```{r, warning=FALSE}
+#Tworzenie wykresu 3d
+plot_ly(
+  data = data,
+  x = ~Dist_Standard,
+  y = ~Sh_Standard,
+  z = ~G_minus_xG_Expected,
+  color = ~Age_Group,
+  colors = "Blues",
+  type = "scatter3d",
+  mode = "markers",
+  text = ~paste(
+    "<b>Player:</b>", Player, "<br>",
+    "<b>Średni dystans od bramki przeciwnika:</b>", Dist_Standard, "<br>",
+    "<b>Ilość strzałów:</b>", Sh_Standard, "<br>",
+    "<b>Skuteczność:</b>", G_minus_xG_Expected, "<br>",
+    "<b>Wiek:</b>", Age, "<br>",
+    "<b>Sezon:</b>", Season_End_Year),
+  hoverinfo = "text") %>%
+  layout(
+    scene = list(
+      xaxis = list(title = "Średni dystans od bramki przeciwnika"),
+      yaxis = list(title = "Ilość strzałów"),
+      zaxis = list(title = "Skuteczność")),
+    title = "")
+```
+
+Przykładowe obserwacje jakie możemy zauważyć ze względu na:
+
+**Średni dystans strzałów:**
+
+a\) Nie ma zawodnika, który posiada w tej statystyce wartość powyżej 30 i oddał więcej niż 5 strzałów.
+
+b\) Wartość ta u większości piłkarzy oscyluje między 10 a 25 metrów.
+
+**Liczba oddanych strzałów:**
+
+a\) Jedynie 6 piłkarzom udało się przebić barierę 150 strzałów w sezonie: Cristiano Ronaldo, Lionel Messi, Harry Kane, Lorenzo Insigne, Rober Lewandowski, oraz Edin Džeko.
+
+b\) Można zaobserwować tendencję, że wraz ze spadkiem liczby strzałów rośnie liczba piłkarzy charakteryzujących się takimi statystykami.
+
+**Skuteczność:**
+
+a\) Najbardziej skuteczni zawodnicy :
+
+Lionel Messi (sezon 2018/19) – Skuteczność = 12,2 .
+
+Alexander Sørloth (sezon 2023/25) – Skuteczność = 10,7.
+
+Paulo Dybala (sezon 2017/18, 23 lata) – Skuteczność = 9,8.
+
+Robert Lewandowski (sezon 2020/21) – Skuteczność = 9,7.
+
+b\) Najmniej skuteczny zawodnik:
+
+Robert Lewandowski (sezonie 2018/19) - Skuteczność = -8,5
+
+## Podział na klastry - ze względu na skuteczność i grupę wiekową
+
+```{r}
+#Wybór cech
+data_cluster <- data %>%
+  select(Age_Group, G_minus_xG_Expected)
+# Przekształcenie pozycji na liczby
+data_cluster$Age_Group <- as.numeric(factor(data_cluster$Age_Group))
+# Normalizacja danych
+data_cluster_scaled <- scale(data_cluster)
+#Tworzenie wykresu "łokcia"
+fviz_nbclust(data_cluster_scaled, kmeans, method = "wss")
+```
+
+```{r}
+#Tworzenie wykresu "silhouette"
+fviz_nbclust(data_cluster, kmeans, method = "silhouette", k.max = 6)
+```
+
+Na podstawie 2 przedstawionych wyżej kryteriów (wykres "elbow" i "silhouette") , dane zostały podzielone na 3 klastry.
+
+```{r}
+#Ustalenie ziarna
+set.seed(12)
+#Tworzenie klastrów
+optimal_cluster <- kmeans(data_cluster, centers = 3, iter.max = 25)
+#Wizualizacja
+fviz_cluster(optimal_cluster, data = data_cluster, labelzise = 0)
+#Dodanie klastrów do ramki data_cluster
+data_cluster$Cluster <-optimal_cluster$cluster
+#Dodanie klastrów do ramki data
+data$Cluster <- optimal_cluster$cluster
+```
+
+Na powyższym wykresie widać, że algorytm podzielił dane na:
+
+1\) Zawodników powyżej 26 roku życia, nie wyrózniających się wybitną skutecznością
+
+2\) Zawodników cechujących się wybitną skutecznością, niezależnie od wieku
+
+3\) Zawodników młodszych niż 26 lat, nie wyróżniających się wybitną skutecznością
+
+Poniżej zamieszczono tabele pomagającą wyszukać obserwacje, by móc sprawdzić do jakiego klastra została ona przydzielona.
+
+```{r, warning=FALSE}
+#Tworzenie pomocniczej ramki
+data_pom7 <- data %>%
+  select(Player, Season_End_Year, Cluster)
+#Wyświetlanie
+datatable(data_pom7)
+```
+
+**Przykładowo:**
+
+Robert Lewandowski w sezonach 2017/18, 2020/21, 2021/22, 2022/23 został przez algorytm zakwalifikowany jako zawodnik cechujący się wybitną skutecznością. Natomiast w pozostałych sezonach (również w obecnym) jako zawodnik powyżej 26 roku życia, nie wyróżniający się wybitną skutecznością.
+
+Lionel Messi w sezonach od 2017/18 do 2020/21 został zakwalifikowany jako zawodnik cechujący się wybitną skutecznością. Natomiast od sezonu 2021/22 stał się zawodnikiem w grupie powyżej 26 roku życia, nie wyróżniający się wybitną skutecznością.
+
+## Podsumowanie
+
+Powyższa analiza częsciowo potwierdziła przyjętą tezę. Potwierdziła ona fakt, że piłkarze na pozycji napastnika są najbardziej skuteczni. Natomiast teza nie została potwierdzona w obszarze kraju pochodzenia piłkarza, gdyż w pierwszej szóstce krajów z najlepszą średnią skutecznością znalazły się tylko 2 kraje europejskie (Gruzja i Słowenia, lecz po odrzuceniu krajów zawierających mniej niż 15 piłkarzy). Ponadto teza nie została potwierdzona w zakresie najlepszej ligi, gdyż nie wykryto różnic w średniej skuteczności między analizowanymi ligami. W tezie przyjęto doświadczonych zawodników jako najbardziej skutecznych, jednak zgodnie z analizami wnioskujemy, że najmłodsza grupa Juniorów (do 18 roku życia) była najbardziej skuteczna, chociaż zdecydowanie najmniej liczna. Na drugim miejscu uplasowała się natomiast najbardziej liczna grupa piłkarzy młodych (21-26 lat). Zgodnie z podziałem na klastry możliwa jest ocena historii każdego piłkarza w obszarze skuteczności i z podziałem na sezony.
+
+Powyższe wyniki mają potencjał wykorzystania do optymalizacji procesów transferowych.

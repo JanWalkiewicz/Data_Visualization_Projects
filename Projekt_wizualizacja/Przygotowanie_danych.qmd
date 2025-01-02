@@ -1,0 +1,214 @@
+---
+title: "Przygotowanie danych"
+format: 
+  html: 
+    toc: true 
+    toc-title: "Spis treści"
+    toc-location: right
+    number-sections: false
+title-block-banner: true
+editor: visual
+code-fold: true
+execute:
+  echo: true
+---
+
+# Scrapowanie danych
+
+```{r, include=FALSE}
+#Biblioteki
+library(worldfootballR)
+library(dplyr)
+```
+
+```{r}
+#Scrapping
+data <- fb_big5_advanced_season_stats(season_end_year= 2018:2025, stat_type= "shooting", team_or_player= "player")
+```
+
+Struktura danych:
+
+```{r}
+#Wizualizacja 6 pierwszych wierszy
+head(data)
+```
+
+### 1) Usunięcie zbędnych kolumn, wierszy i obserwacji
+
+```{r}
+#Usuniecie ostatniej kolumny
+data <- data[, -ncol(data)]
+#Usuniecie innych nieporzebnych kolumn
+data <- data %>%
+  select(-Born, -Mins_Per_90, -SoT_Standard, -Sh_per_90_Standard, 
+         -SoT_per_90_Standard, -G_per_Sh_Standard, -G_per_SoT_Standard, 
+         -FK_Standard, -SoT_percent_Standard, -PK_Standard,-PKatt_Standard,
+         -npxG_per_Sh_Expected, -npxG_Expected, -"np:G_minus_xG_Expected")
+```
+
+Jako, że analiza będzie dotyczyła statystyk związanych ze strzałami, zdecydowałem się odrzucić wszystkich piłkarzy grających na pozycji bramkarza, oddali oni zaledwie 65 strzałów co w parównaniu do 332 175 oddanych przez piłkarzy grających na innych pozycjach stanowi zaledwie 0,02% wszystkich strzałów.
+
+```{r}
+#Usunięcie bramkarzy
+data <- data %>%
+  filter(Pos != "GK")
+```
+
+Oraz obserwacje zawierające wartości Na w kolumnie "G_minus_xG_Expected"
+
+```{r}
+#Usunięcie obserwacji z G_minus_xG_Expected = Na
+data <- data %>%
+  filter(!is.na(G_minus_xG_Expected))
+```
+
+### 2) Naprawa błędów
+
+Widać także, że część obserwacji zawiera 2 pozycje (chodzi o kolumne "Pos"). Jednak po przeanalizowaniu tych przypadków za optymalne uważam zostawienie tylko tej, która występuje jako pierwsza. To ona definiuje pozycje, na której zawodnik występuje częściej lub lepiej oddaje specyfikę pozycji, na której dany piłkarz występuje.
+
+Przykładowo, dwie pozycje w kolumnie "Pos" zawierają Vinicius Júnior, który w różnych zestawieniach jest traktowany zdecydowanie częściej jako napastnik niż jako pomocnik. Podobnie sytuacja wygląda w innych przypadkach.
+
+```{r}
+#Wizualizacja wierszy, gdzie Vinicius Junior zawiera dwi pozycje
+data[data$Player == "Vinicius Júnior" & data$Pos == "FW,MF" & data$Season_End_Year == 2020, c("Player", "Pos")]
+```
+
+```{r}
+#Zmiana komórek, gdzie znajdują się 2 pozycje
+data <- data %>%
+  mutate(Pos = case_when(
+    Pos == "DF,FW" ~ "DF",
+    Pos == "DF,MF" ~ "DF",
+    Pos == "FW,DF" ~ "FW",
+    Pos == "FW,MF" ~ "FW",
+    Pos == "MF,DF" ~ "MF",
+    Pos == "MF,FW" ~ "MF",
+    TRUE ~ Pos))
+```
+
+Ramka danych zawiera błędy w kolumnie "Age" w niektórych obserwacjach oprócz wieku w latach zecrappowane zostały także dni po myślniku, usuwam je gdyż nie przydadzą się one w analizie.
+
+```{r}
+#Usunięcie "-" i wszystkiego co występuje po nim
+data$Age <- sub("-.*", "", data$Age)
+```
+
+### 3) Uzupełnienie braków
+
+Zauważyłem także, że ramka zawiera braki
+
+```{r}
+#Sprawdzenie braków
+colSums(data == "")
+```
+
+Jako, że jest ich jedynie 32 zdecydowałem się uzupełnić braki ręcznie
+
+```{r}
+#Uzupełnienie narodowości
+data$Nation[data$Season_End_Year == 2018 & data$Player == "Christian Rutjens"] <- "ESP"
+data$Nation[data$Season_End_Year == 2018 & data$Player == "Anthony Walongwa"] <- "COD"
+data$Nation[data$Season_End_Year == 2019 & data$Player == "Anthony Walongwa"] <- "COD"
+data$Nation[data$Season_End_Year == 2019 & data$Player == "Alessio da Cruz"] <- "CPV"
+data$Nation[data$Season_End_Year == 2019 & data$Player == "Hakim El Mokeddem"] <- "FRA"
+data$Nation[data$Season_End_Year == 2020 & data$Player == "Sinan Gümüş"] <- "GER"
+data$Nation[data$Season_End_Year == 2021 & data$Player == "Atakan Karazor"] <- "GER"
+data$Nation[data$Season_End_Year == 2022 & data$Player == "Atakan Karazor"] <- "GER"
+data$Nation[data$Season_End_Year == 2023 & data$Player == "Atakan Karazor"] <- "GER"
+data$Nation[data$Season_End_Year == 2024 & data$Player == "Mahmut Kücüksahin"] <- "TUR"
+data$Nation[data$Season_End_Year == 2024 & data$Player == "Marco Pellegrino"] <- "ARG"
+data$Nation[data$Season_End_Year == 2024 & data$Player == "Atakan Karazor"] <- "GER"
+data$Nation[data$Season_End_Year == 2025 & data$Player == "Atakan Karazor"] <- "GER"
+data$Nation[data$Season_End_Year == 2025 & data$Player == "Fer López"] <- "ESP"
+
+#Uzupełnienie pozycji
+data$Pos[data$Season_End_Year == 2018 & data$Player == "Christian Rutjens"] <- "DF"
+
+#Uzupełnienie wieku
+data$Age[data$Season_End_Year == 2018 & data$Player == "Christian Rutjens"] <- "20"
+data$Age[data$Season_End_Year == 2024 & data$Player == "Marco Pellegrino"] <- "21"
+data$Age[data$Season_End_Year == 2024 & data$Player == "Max Moerstedt"] <- "18"
+data$Age[data$Season_End_Year == 2025 & data$Player == "Fer López"] <- "25"
+data$Age[data$Season_End_Year == 2024 & data$Player == "Max Svensson"] <- "27"
+data$Age[data$Season_End_Year == 2025 & data$Player == "Max Moerstedt"] <- "19"
+data$Age[data$Season_End_Year == 2024 & data$Player == "Christian Rutjens"] <- "21"
+data$Age[data$Season_End_Year == 2025 & data$Player == "Pape Daouda Diongue"] <- "18"
+```
+
+### 4) Zmiana typów
+
+Typy poszczególnych kolumn:
+
+```{r}
+#Wizualizacja 6 pierwszych wierszy
+str(data)
+```
+
+W kolumnie "Age" lepiej sprawdzi się typ int.
+
+```{r}
+#Zmiana typów
+data$Age <- as.integer(data$Age)
+```
+
+### 5) Tworzenie dodatkowej kolumny - Age_Group
+
+Podczas analizy przyda się także kolumna, która bazowo nie znajduje się w zesrappowanych danych. Będzie ona zawierać informacje na temat grupy wiekowej, w jakiej dany zawodnik się znajduje. Grupy zostały przyznane w następujący sposób:
+
+Junior - 18 lat i poniżej
+
+Bardzo młody - 21 lat i poniżej
+
+Młody - 26 lat i poniżej
+
+Średni - 30 lat i poniżej
+
+Starszy - powyżej 30
+
+```{r}
+#Tworzenie kolumny - Age_Group
+data <- data %>%
+  mutate(
+    Age_Group = case_when(
+      Age <= 18 ~ "Junior (18 i poniżej)",
+      Age <= 21 ~ "Bardzo młody (21 i poniżej)",
+      Age <= 26 ~ "Młody (26 i poniżej)",
+      Age <= 30 ~ "Średni (30 i poniżej)",
+      TRUE ~ "Starszy (powyżej 30)"))
+```
+
+### 6) Tworzenie dodatkowej ramki
+
+Podczas analizy potrzebna będzie także dodatkowa ramka danych zawierająca dodatkową kolumne "win". Dodatkowa kolumna będzie dotyczyła tego czy drużyna zawodnika w danym sezonie zakończyła sezon na pozycji 5 lub wyższej. Jeśli tak to w kolumnie win wstawiam wartość true, w przeciwnym wypadku false. W tym przypadku zdecydowałem się na stworzenie dodatkowej ramki a nie dołączenie kolumny do powstałej już ramki, gdyż we wcześniejszej ramce znajdują się obserwacje z obecnego sezonu, który jeszcze się nie skończył. Co za tym idzie nie wiadomo na jakiej pozycji dane kluby skończą sezon. Podczas wizualizacji związanej z kolumną "win" i tak musiałbym stworzyć ramkę pomocniczą, w której odrzuciliłbym obserwacje z tego sezonu. Stąd też decyduje się to zrobić teraz, by nie robić tego potem w głównym pliku, w którym będzie przeprowadzana analiza.
+
+Tworzenie takiej kolumny ręcznie zajęłoby sporo czasu. Dlatego też zdecydowałem się dane potrzebne do stworzenia jej zescrappować ponownie ze strony [Fbref](https://fbref.com/en/) i ponownie z pomocą paczki [worldfootabllR](https://jaseziv.github.io/worldfootballR/articles/extract-fbref-data.html#the-big-5-euro-league-players)
+
+```{r}
+#Stworzenie pustej ramki
+data_win <- data.frame()
+#Scrapping
+seasons <- 2018:2024
+countries <- c("ENG", "ESP", "GER", "ITA", "FRA")
+
+for (country in countries) {
+  for (season in seasons) {
+    Sys.sleep(5) #Opóźnienie podczas scrappowania danych z różnych podstron w tym przypadku pomaga uniknąć potencjalncyh błędów
+    help_data <- fb_season_team_stats(country=country,gender="M",season_end_year=season,tier="1st",stat_type="league_table")
+data_win <- rbind(data_win, help_data)}}
+
+#Usunięcie zbędnych obserwacji
+data_win <- data_win %>% filter(Rk >= 1 & Rk <= 5)
+#Usunięcie zbędnych kolumn
+data_win <- data_win %>% select(Season_End_Year, Squad)
+#Dodanie kolumny win
+data_win <- data %>%
+  mutate(win = ifelse(paste(Season_End_Year, Squad) %in% paste(data_win$Season_End_Year, data_win$Squad), TRUE, FALSE))
+```
+
+### 7) Zapis gotowych ramek
+
+```{r}
+#Zapis
+write.csv(data, "football_data.csv", row.names = FALSE)
+write.csv(data_win, "football_data_winners.csv", row.names = FALSE)
+```
