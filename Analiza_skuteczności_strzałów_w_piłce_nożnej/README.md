@@ -1,5 +1,3 @@
-# README.qmd
-
 # Analiza skuteczności w piłce nożnej
 
 **Celem** niniejszego projektu jest analiza różnic w skuteczności
