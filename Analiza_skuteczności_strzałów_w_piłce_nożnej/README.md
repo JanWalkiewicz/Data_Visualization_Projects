@@ -47,6 +47,32 @@ Czy istnieje wiekowy “prime” w skuteczności strzeleckiej?
 
 12\) cluster plot
 
+## Wykorzystany język programowania: R
+
+#### **Wykorzystane Biblioteki**
+
+* **Pozyskiwanie i Import Danych:**
+    * `worldfootballR`
+    * `rio`
+    * `data.table`
+* **Przetwarzanie Danych:**
+    * `tidyverse`
+    * `scales`
+* **Wizualizacja:**
+    * `ggplot2`
+    * `ggsoccer`
+    * `RColorBrewer`
+    * `gridExtra`
+    * `ggtext`
+    * `hrbrthemes`
+    * `plotly`
+    * `leaflet`
+    * `sf`
+    * `htmlwidgets`
+* **Klastrowanie:**
+    * `factoextra`
+
+
 
 **Klonowanie repozytorium:**
 
