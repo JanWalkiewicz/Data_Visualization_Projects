@@ -55,9 +55,9 @@ football_data.csv/football_data_winners.csv - Dane użyte podczas analizy
 
 12\) cluster plot
 
-### Wykorzystany język programowania: R
+### W tym celu użyto języka programowania: R
 
-#### **Wykorzystane Biblioteki**
+#### **Wykorzystano Biblioteki**
 
 * **Pozyskiwanie i Import Danych:**
     * `worldfootballR`
