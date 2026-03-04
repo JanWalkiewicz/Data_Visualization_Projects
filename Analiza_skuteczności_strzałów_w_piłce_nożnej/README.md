@@ -47,7 +47,6 @@ Czy istnieje wiekowy “prime” w skuteczności strzeleckiej?
 
 12\) cluster plot
 
-# Jak otworzyć projekt:
 
 **Klonowanie repozytorium:**
 
