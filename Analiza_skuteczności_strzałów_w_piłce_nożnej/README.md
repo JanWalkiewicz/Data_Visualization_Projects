@@ -52,12 +52,13 @@ Czy istnieje wiekowy “prime” w skuteczności strzeleckiej?
 
     git clone https://github.com/JanWalkiewicz/Data_Visualization_Projects.git
 
-**W folderze Projekt_wizualizacja otworzyć plik:**
+**Struktura projektu:**
 
-Główna_analiza.html - znajduje się w nim główna analiza
+Główna_analiza.html - Główna część projektu, w której badam między innymi korelacje i trendy. Wykorzystałem wizualizacje, aby odpowiedzieć na kluczowe pytania dotyczące sukcesów w piłce nożnej.
 
-Przygotowanie_danych.html - znajduje się w nim proces web srappingu i
-czyszczenia danych
+Przygotowanie_danych.html - Proces web srappingu (z pomocą paczki worldfootballR) i czyszczenia danych
+
+football_data.csv/football_data_winners.csv - Dane użyte podczas analizy
 
 # Autor:
 
