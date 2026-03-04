@@ -47,7 +47,7 @@ Czy istnieje wiekowy “prime” w skuteczności strzeleckiej?
 
 12\) cluster plot
 
-## Wykorzystany język programowania: R
+### Wykorzystany język programowania: R
 
 #### **Wykorzystane Biblioteki**
 
