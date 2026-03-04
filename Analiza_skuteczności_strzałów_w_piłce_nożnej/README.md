@@ -21,7 +21,7 @@ skuteczności strzałów?
 
 Czy istnieje wiekowy “prime” w skuteczności strzeleckiej?
 
-**Struktura projektu:**
+## **Struktura projektu:**
 
 Główna_analiza.html - Główna część projektu, w której badam między innymi korelacje i trendy. Wykorzystałem wizualizacje, aby odpowiedzieć na kluczowe pytania dotyczące sukcesów w piłce nożnej.
 
@@ -55,9 +55,7 @@ football_data.csv/football_data_winners.csv - Dane użyte podczas analizy
 
 12\) cluster plot
 
-### W tym celu użyto języka programowania: R
-
-#### **Wykorzystano Biblioteki**
+#### **Wykorzystano Biblioteki R:**
 
 * **Pozyskiwanie i Import Danych:**
     * `worldfootballR`
